@@ -1,0 +1,735 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>PFP Hub — Aesthetic Gallery</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<div class="page">
+
+  <!-- Top bar -->
+  <header class="topbar">
+    <div class="logoBlock">
+      <div class="logoCircle">P</div>
+      <div>
+        <div class="logoTitle">PFP Hub</div>
+        <div class="logoSub">aesthetic profile gallery</div>
+      </div>
+    </div>
+    <div class="topRight">
+      <div class="search">
+        <input id="search" placeholder="Search vibes, names, creators..." />
+      </div>
+      <button id="adminOpen" class="adminBtn">Admin</button>
+    </div>
+  </header>
+
+  <!-- Sections -->
+  <main class="content">
+    <section class="section">
+      <div class="sectionTitle">
+        <h3>Top picks</h3>
+        <span class="sub">Most loved pfps</span>
+      </div>
+      <div id="top" class="row"></div>
+    </section>
+
+    <section class="section">
+      <div class="sectionTitle">
+        <h3>Recent drops</h3>
+        <span class="sub">Fresh uploads</span>
+      </div>
+      <div id="recent" class="row"></div>
+    </section>
+
+    <section class="section">
+      <div class="sectionTitle">
+        <h3>Aesthetic</h3>
+        <span class="sub">Soft, dreamy, moody</span>
+      </div>
+      <div id="aesthetic" class="row"></div>
+    </section>
+
+    <section class="section">
+      <div class="sectionTitle">
+        <h3>All</h3>
+        <span class="sub">Everything in one rail</span>
+      </div>
+      <div id="all" class="row"></div>
+    </section>
+  </main>
+</div>
+
+<!-- Toast -->
+<div id="toast" class="toast" hidden></div>
+
+<!-- Admin Drawer -->
+<aside id="adminDrawer" class="adminDrawer" aria-hidden="true">
+  <div class="adminInner">
+    <div class="adminHeader">
+      <h2>Admin Panel</h2>
+      <button id="closeAdmin" class="iconBtn">✕</button>
+    </div>
+    <p class="adminHint">
+      Add, edit & delete PFPs.  
+      <span class="dim">Server-backed (MongoDB) when unlocked.</span>
+    </p>
+
+    <!-- Auth -->
+    <div id="adminAuth" class="cardBox">
+      <label class="field">
+        <span>Admin password</span>
+        <input id="adminPass" placeholder="Enter admin password" type="password" />
+      </label>
+      <div class="btnRow">
+        <button id="adminLogin" class="btn primary">Unlock</button>
+        <button id="adminClose" class="btn ghost">Close</button>
+      </div>
+      <p class="tiny dim">
+        Uses <code>ADMIN_PASSWORD</code> from server.  
+        Password is <strong>not stored</strong> anywhere in DB.
+      </p>
+    </div>
+
+    <!-- Real admin area -->
+    <div id="adminArea" style="display:none">
+      <div class="cardBox">
+        <h3>Add new PFP</h3>
+
+        <div class="gridTwo">
+          <label class="field">
+            <span>Title</span>
+            <input id="f_title" placeholder="e.g. Neon angel" />
+          </label>
+          <label class="field">
+            <span>Author</span>
+            <input id="f_author" placeholder="e.g. @kai" />
+          </label>
+        </div>
+
+        <div class="gridTwo">
+          <label class="field">
+            <span>Category</span>
+            <select id="f_cat">
+              <option value="top">Top</option>
+              <option value="recent">Recent</option>
+              <option value="aesthetic">Aesthetic</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>Image URL (auto from upload / gallery)</span>
+            <input id="f_url" placeholder="Choose image below or paste URL" />
+          </label>
+        </div>
+
+        <!-- Upload + gallery -->
+        <div class="field">
+          <span>Upload or pick from gallery</span>
+          <div id="uploadZone" class="uploadZone">
+            <input id="fileInput" type="file" accept="image/*" hidden />
+            <div class="uploadInner">
+              <div class="uploadIcon">⬆️</div>
+              <div class="uploadText">
+                <div>Drop image here or <span class="linkish">browse</span></div>
+                <div class="hint">Max 5MB • JPG, PNG, WEBP</div>
+              </div>
+            </div>
+          </div>
+          <div id="galleryStrip" class="galleryStrip"></div>
+        </div>
+
+        <div class="btnRow">
+          <button id="addBtn" class="btn primary">Add</button>
+          <button id="clearForm" class="btn ghost">Clear</button>
+        </div>
+      </div>
+
+      <div class="cardBox">
+        <div class="listHeader">
+          <h3>Existing items</h3>
+          <button id="syncBtn" class="btn tiny ghost">Sync with server</button>
+        </div>
+        <div id="adminList" class="adminList"></div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<script>
+const API_BASE = ''; // same origin
+const STORAGE_KEY = 'pfp_items_v1';
+
+let ITEMS = [];
+let USING_SERVER = false;
+let CURRENT_ADMIN_PASS = '';
+
+const DEFAULT_ITEMS = [
+  {
+    id: 'i1',
+    title: 'Midnight glitch',
+    author: 'nova',
+    url: 'https://images.pexels.com/photos/7794449/pexels-photo-7794449.jpeg',
+    cat: 'top',
+    tags: ['neon','dark']
+  },
+  {
+    id: 'i2',
+    title: 'Soft pastel girl',
+    author: 'mira',
+    url: 'https://images.pexels.com/photos/733872/pexels-photo-733872.jpeg',
+    cat: 'aesthetic',
+    tags: ['soft','pastel']
+  },
+  {
+    id: 'i3',
+    title: 'Cyberpunk fox',
+    author: 'zero',
+    url: 'https://images.pexels.com/photos/7174370/pexels-photo-7174370.jpeg',
+    cat: 'recent',
+    tags: ['anime','cyber']
+  }
+];
+
+/* ===== API helpers ===== */
+async function apiGetAll(){
+  try{
+    const r = await fetch(API_BASE + '/api/pfps');
+    const data = await r.json();
+    if(!data || data.ok === false || !Array.isArray(data.items)) return null;
+    return data.items;
+  }catch(e){
+    console.error('apiGetAll error', e);
+    return null;
+  }
+}
+async function apiAdd(item, pass){
+  const r = await fetch(API_BASE + '/api/pfps', {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json','x-admin-pass':pass },
+    body: JSON.stringify(item)
+  });
+  return await r.json();
+}
+async function apiUpdate(id, updates, pass){
+  const r = await fetch(API_BASE + '/api/pfps/' + id, {
+    method:'PUT',
+    headers:{ 'Content-Type':'application/json','x-admin-pass':pass },
+    body: JSON.stringify(updates)
+  });
+  return await r.json();
+}
+async function apiDelete(id, pass){
+  const r = await fetch(API_BASE + '/api/pfps/' + id, {
+    method:'DELETE',
+    headers:{ 'x-admin-pass':pass }
+  });
+  return await r.json();
+}
+
+// upload + gallery
+async function apiUpload(file, pass){
+  const fd = new FormData();
+  fd.append('file', file);
+  const r = await fetch(API_BASE + '/api/upload', {
+    method:'POST',
+    headers:{ 'x-admin-pass': pass },
+    body: fd
+  });
+  return await r.json();
+}
+async function apiGetGallery(){
+  try{
+    const r = await fetch(API_BASE + '/api/gallery');
+    return await r.json();
+  }catch(e){
+    console.error('gallery error', e);
+    return { ok:false, items:[] };
+  }
+}
+
+/* ===== local storage fallback ===== */
+function loadLocal(){
+  try{
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if(!raw) return DEFAULT_ITEMS.slice();
+    const parsed = JSON.parse(raw);
+    if(!Array.isArray(parsed)) return DEFAULT_ITEMS.slice();
+    return parsed;
+  }catch(e){
+    console.warn('local load error', e);
+    return DEFAULT_ITEMS.slice();
+  }
+}
+function saveLocal(items){
+  try{
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(items));
+  }catch(e){
+    console.warn('local save error', e);
+  }
+}
+
+/* ===== toast ===== */
+const toastEl = document.getElementById('toast');
+let toastTimeout = null;
+function showToast(msg){
+  if(!toastEl) return;
+  toastEl.textContent = msg;
+  toastEl.hidden = false;
+  toastEl.classList.add('show');
+  if(toastTimeout) clearTimeout(toastTimeout);
+  toastTimeout = setTimeout(()=>{
+    toastEl.classList.remove('show');
+    toastEl.hidden = true;
+  }, 2200);
+}
+
+/* ===== rendering ===== */
+function filterBySearch(items){
+  const q = (document.getElementById('search').value || '').toLowerCase();
+  if(!q) return items;
+  return items.filter(it => {
+    return (it.title||'').toLowerCase().includes(q) ||
+           (it.author||'').toLowerCase().includes(q) ||
+           (it.cat||'').toLowerCase().includes(q);
+  });
+}
+
+function renderSection(id, catFilter){
+  const el = document.getElementById(id);
+  if(!el) return;
+  el.innerHTML = '';
+
+  let data = ITEMS.slice();
+  if(catFilter) data = data.filter(it => (it.cat || 'top') === catFilter);
+  data = filterBySearch(data);
+
+  if(id === 'all'){ /* keep all */ }
+  else data = data.slice(0, 12);
+
+  if(!data.length){
+    const empty = document.createElement('div');
+    empty.className = 'emptyMsg';
+    empty.innerText = 'No items match.';
+    el.appendChild(empty);
+    return;
+  }
+
+  data.forEach(it => {
+    el.appendChild(makeCard(it));
+  });
+}
+
+function makeCard(item){
+  const card = document.createElement('article');
+  card.className = 'card';
+
+  const imgWrap = document.createElement('div');
+  imgWrap.className = 'thumb';
+  const img = document.createElement('img');
+  img.src = item.url;
+  img.alt = item.title || 'pfp';
+  img.loading = 'lazy';
+  imgWrap.appendChild(img);
+  card.appendChild(imgWrap);
+
+  const title = document.createElement('div');
+  title.className = 'caption';
+  title.textContent = item.title || 'Untitled';
+  card.appendChild(title);
+
+  const sub = document.createElement('div');
+  sub.className = 'sub';
+  sub.textContent = 'by ' + (item.author || 'unknown');
+  card.appendChild(sub);
+
+  const footer = document.createElement('div');
+  footer.className = 'cardFooter';
+  const viewBtn = document.createElement('button');
+  viewBtn.className = 'btn tiny ghost';
+  viewBtn.textContent = 'View';
+  viewBtn.onclick = () => window.open(item.url, '_blank');
+
+  const dlBtn = document.createElement('button');
+  dlBtn.className = 'btn tiny primary';
+  dlBtn.textContent = 'Download';
+  dlBtn.onclick = () => {
+    const a = document.createElement('a');
+    a.href = item.url;
+    a.download = (item.title || 'pfp') + '.jpg';
+    document.body.appendChild(a); a.click(); a.remove();
+  };
+
+  footer.appendChild(viewBtn);
+  footer.appendChild(dlBtn);
+  card.appendChild(footer);
+
+  return card;
+}
+
+function renderSections(){
+  renderSection('top','top');
+  renderSection('recent','recent');
+  renderSection('aesthetic','aesthetic');
+  renderSection('all', null);
+}
+
+/* ===== admin drawer / login ===== */
+const adminDrawer = document.getElementById('adminDrawer');
+const adminOpenBtn = document.getElementById('adminOpen');
+const adminCloseBtn = document.getElementById('closeAdmin');
+const adminAuth = document.getElementById('adminAuth');
+const adminArea = document.getElementById('adminArea');
+const adminPassInput = document.getElementById('adminPass');
+const adminLoginBtn = document.getElementById('adminLogin');
+const adminCloseAuthBtn = document.getElementById('adminClose');
+
+adminOpenBtn.addEventListener('click', () => {
+  adminDrawer.classList.add('show');
+  adminAuth.style.display = 'block';
+  adminArea.style.display = 'none';
+  adminPassInput.value = '';
+});
+
+function closeAdminDrawer(){
+  adminDrawer.classList.remove('show');
+}
+adminCloseBtn.addEventListener('click', closeAdminDrawer);
+adminCloseAuthBtn.addEventListener('click', closeAdminDrawer);
+
+adminLoginBtn.addEventListener('click', async () => {
+  const pass = adminPassInput.value.trim();
+  if(!pass){ alert('Enter password'); return; }
+  CURRENT_ADMIN_PASS = pass;
+
+  const items = await apiGetAll();
+  if(items === null){
+    if(confirm('Server unreachable. Use local-only mode?')){
+      USING_SERVER = false;
+      ITEMS = loadLocal();
+      adminAuth.style.display = 'none';
+      adminArea.style.display = 'block';
+      populateAdminList();
+      showToast('Admin unlocked (local mode)');
+    } else {
+      CURRENT_ADMIN_PASS = '';
+    }
+    return;
+  }
+
+  USING_SERVER = true;
+  ITEMS = items.map(it => ({
+    id: it._id || it.id,
+    _id: it._id || it.id,
+    title: it.title,
+    author: it.author || 'unknown',
+    url: it.url,
+    cat: it.cat || 'top',
+    tags: it.tags || []
+  }));
+  saveLocal(ITEMS);
+  renderSections();
+  adminAuth.style.display = 'none';
+  adminArea.style.display = 'block';
+  populateAdminList();
+  loadGallery();
+  showToast('Admin unlocked (server mode)');
+});
+
+/* ===== admin list + CRUD ===== */
+const adminListEl = document.getElementById('adminList');
+
+function populateAdminList(){
+  adminListEl.innerHTML = '';
+  if(!ITEMS.length){
+    const empty = document.createElement('div');
+    empty.className = 'emptyMsg';
+    empty.textContent = 'No items yet.';
+    adminListEl.appendChild(empty);
+    return;
+  }
+  ITEMS.forEach(it => {
+    const row = document.createElement('div');
+    row.className = 'adminItem';
+    row.innerHTML = `
+      <img src="${it.url}" alt="${(it.title||'pfp').replace(/"/g,'')}" />
+      <div class="adminMeta">
+        <div class="title">${it.title || 'Untitled'}</div>
+        <div class="sub">by ${it.author || 'unknown'} • ${it.cat || 'top'}</div>
+      </div>
+      <div class="adminActions">
+        <button class="btn tiny ghost editBtn">Edit</button>
+        <button class="btn tiny danger delBtn">Delete</button>
+      </div>
+    `;
+    adminListEl.appendChild(row);
+
+    row.querySelector('.editBtn').onclick = () => openEdit(it);
+    row.querySelector('.delBtn').onclick = () => deleteItem(it);
+  });
+}
+
+const titleInput = document.getElementById('f_title');
+const authorInput = document.getElementById('f_author');
+const catSelect = document.getElementById('f_cat');
+const urlInput = document.getElementById('f_url');
+const addBtn = document.getElementById('addBtn');
+const clearFormBtn = document.getElementById('clearForm');
+const syncBtn = document.getElementById('syncBtn');
+
+let editingId = null;
+
+function clearForm(){
+  editingId = null;
+  titleInput.value = '';
+  authorInput.value = '';
+  urlInput.value = '';
+  catSelect.value = 'top';
+  addBtn.textContent = 'Add';
+}
+
+function openEdit(it){
+  editingId = it._id || it.id;
+  titleInput.value = it.title || '';
+  authorInput.value = it.author || '';
+  urlInput.value = it.url || '';
+  catSelect.value = it.cat || 'top';
+  addBtn.textContent = 'Update';
+}
+
+async function deleteItem(it){
+  if(!confirm('Delete this item?')) return;
+
+  if(USING_SERVER && CURRENT_ADMIN_PASS){
+    const res = await apiDelete(it._id || it.id, CURRENT_ADMIN_PASS);
+    if(!res || res.ok === false){
+      alert('Delete failed');
+      return;
+    }
+    ITEMS = ITEMS.filter(x => (x._id || x.id) !== (it._id || it.id));
+  } else {
+    ITEMS = ITEMS.filter(x => x.id !== it.id);
+  }
+  saveLocal(ITEMS);
+  renderSections();
+  populateAdminList();
+  showToast('Deleted');
+}
+
+addBtn.onclick = async () => {
+  const t = titleInput.value.trim();
+  const a = authorInput.value.trim() || 'unknown';
+  const u = urlInput.value.trim();
+  const c = catSelect.value;
+
+  if(!t || !u){
+    alert('Title and image URL required');
+    return;
+  }
+
+  if(editingId){
+    // update
+    if(USING_SERVER && CURRENT_ADMIN_PASS){
+      const res = await apiUpdate(editingId, { title:t, author:a, url:u, cat:c }, CURRENT_ADMIN_PASS);
+      if(!res || res.ok === false){
+        alert('Update failed');
+        return;
+      }
+      const idx = ITEMS.findIndex(x => (x._id || x.id) === editingId);
+      if(idx >= 0) ITEMS[idx] = res.item;
+    } else {
+      const it = ITEMS.find(x => x.id === editingId);
+      if(it){
+        it.title = t; it.author = a; it.url = u; it.cat = c;
+      }
+    }
+    showToast('Updated');
+  } else {
+    // add
+    if(USING_SERVER && CURRENT_ADMIN_PASS){
+      const res = await apiAdd({ title:t, author:a, url:u, cat:c, tags:[] }, CURRENT_ADMIN_PASS);
+      if(!res || res.ok === false){
+        alert('Add failed');
+        return;
+      }
+      ITEMS.unshift(res.item);
+    } else {
+      const id = 'i' + Date.now().toString(36);
+      ITEMS.unshift({ id, title:t, author:a, url:u, cat:c, tags:[] });
+    }
+    showToast('Added');
+  }
+
+  saveLocal(ITEMS);
+  renderSections();
+  populateAdminList();
+  clearForm();
+};
+
+clearFormBtn.onclick = clearForm;
+syncBtn.onclick = async () => {
+  const items = await apiGetAll();
+  if(items === null){
+    alert('Server not reachable');
+    return;
+  }
+  USING_SERVER = true;
+  ITEMS = items.map(it => ({
+    id: it._id || it.id,
+    _id: it._id || it.id,
+    title: it.title,
+    author: it.author || 'unknown',
+    url: it.url,
+    cat: it.cat || 'top',
+    tags: it.tags || []
+  }));
+  saveLocal(ITEMS);
+  renderSections();
+  populateAdminList();
+  loadGallery();
+  showToast('Synced with server');
+};
+
+/* ===== upload + gallery ===== */
+const uploadZone = document.getElementById('uploadZone');
+const fileInput = document.getElementById('fileInput');
+const galleryStrip = document.getElementById('galleryStrip');
+
+function setUrlAndHighlight(url){
+  if(urlInput) urlInput.value = url || '';
+  if(!galleryStrip) return;
+  Array.from(galleryStrip.querySelectorAll('.galleryItem')).forEach(el => {
+    el.classList.toggle('active', el.dataset.url === url);
+  });
+}
+
+async function loadGallery(){
+  if(!galleryStrip) return;
+  galleryStrip.innerHTML = '';
+  const res = await apiGetGallery();
+  if(!res || res.ok === false || !Array.isArray(res.items) || !res.items.length){
+    const empty = document.createElement('div');
+    empty.className = 'tiny dim';
+    empty.textContent = 'Uploaded images will appear here.';
+    galleryStrip.appendChild(empty);
+    return;
+  }
+  res.items.forEach(item => {
+    const box = document.createElement('div');
+    box.className = 'galleryItem';
+    box.dataset.url = item.url;
+    const img = document.createElement('img');
+    img.src = item.url;
+    img.alt = item.name || 'image';
+    box.appendChild(img);
+    box.onclick = () => {
+      setUrlAndHighlight(item.url);
+      showToast('Image selected');
+    };
+    galleryStrip.appendChild(box);
+  });
+}
+
+function wireUploadZone(){
+  if(!uploadZone || !fileInput) return;
+
+  const browseSpan = uploadZone.querySelector('.linkish');
+
+  uploadZone.addEventListener('click', (e) => {
+    if(e.target && e.target.closest('.galleryStrip')) return;
+    fileInput.click();
+  });
+
+  if(browseSpan){
+    browseSpan.addEventListener('click', (e)=>{
+      e.stopPropagation();
+      fileInput.click();
+    });
+  }
+
+  uploadZone.addEventListener('dragover', (e)=>{
+    e.preventDefault();
+    uploadZone.classList.add('dragover');
+  });
+  uploadZone.addEventListener('dragleave', (e)=>{
+    if(e.target === uploadZone){
+      uploadZone.classList.remove('dragover');
+    }
+  });
+  uploadZone.addEventListener('drop', (e)=>{
+    e.preventDefault();
+    uploadZone.classList.remove('dragover');
+    const file = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+    if(file) handleUploadFile(file);
+  });
+
+  fileInput.addEventListener('change', ()=>{
+    const file = fileInput.files && fileInput.files[0];
+    if(file) handleUploadFile(file);
+    fileInput.value = '';
+  });
+}
+
+async function handleUploadFile(file){
+  if(!CURRENT_ADMIN_PASS){
+    alert('First unlock admin with password, then upload.');
+    return;
+  }
+  if(file.size > 5 * 1024 * 1024){
+    alert('File too large (max 5MB).');
+    return;
+  }
+  showToast('Uploading...');
+  try{
+    const res = await apiUpload(file, CURRENT_ADMIN_PASS);
+    if(!res || res.ok === false){
+      alert('Upload failed');
+      return;
+    }
+    setUrlAndHighlight(res.url);
+    await loadGallery();
+    showToast('Image uploaded');
+  }catch(e){
+    console.error('upload error', e);
+    alert('Upload error, check console.');
+  }
+}
+
+/* ===== initial load ===== */
+async function init(){
+  wireUploadZone();
+  // try server
+  const items = await apiGetAll();
+  if(items === null){
+    USING_SERVER = false;
+    ITEMS = loadLocal();
+    showToast('Server offline — using local data');
+  } else {
+    USING_SERVER = true;
+    ITEMS = items.map(it => ({
+      id: it._id || it.id,
+      _id: it._id || it.id,
+      title: it.title,
+      author: it.author || 'unknown',
+      url: it.url,
+      cat: it.cat || 'top',
+      tags: it.tags || []
+    }));
+    saveLocal(ITEMS);
+  }
+  renderSections();
+  document.getElementById('search').addEventListener('input', renderSections);
+}
+init();
+
+/* escape menus on ESC */
+document.addEventListener('keydown', (e)=>{
+  if(e.key === 'Escape'){
+    adminDrawer.classList.remove('show');
+  }
+});
+</script>
+</body>
+</html>
